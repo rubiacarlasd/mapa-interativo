@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa Interativo — Alunos</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f5f5f5; }
+
+    /* TOOLBAR */
+    #toolbar {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+      padding: 10px 14px; background: #1A4C8B; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    #toolbar h1 { color: white; font-size: 15px; font-weight: 600; margin-right: 8px; white-space: nowrap; }
+    .tool-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border: none; border-radius: 6px;
+      background: rgba(255,255,255,0.15); color: white;
+      font-size: 13px; cursor: pointer; transition: background 0.15s;
+    }
+    .tool-btn:hover { background: rgba(255,255,255,0.28); }
+    .tool-btn.active { background: white; color: #1A4C8B; font-weight: 600; }
+    #mode-label {
+      margin-left: auto; font-size: 12px; color: rgba(255,255,255,0.75);
+      background: rgba(0,0,0,0.2); padding: 5px 10px; border-radius: 5px;
+      white-space: nowrap;
+    }
+    #count-badge {
+      background: #F59E0B; color: white; font-size: 11px; font-weight: 700;
+      padding: 2px 7px; border-radius: 10px; margin-left: -4px;
+    }
+
+    /* MAP */
+    #map { flex: 1; width: 100%; }
+
+    /* PANEL */
+    #panel {
+      position: fixed; right: 0; top: 56px; bottom: 0; width: 280px;
+      background: white; border-left: 1px solid #e0e0e0;
+      display: flex; flex-direction: column;
+      transform: translateX(100%); transition: transform 0.22s ease;
+      z-index: 100; box-shadow: -3px 0 12px rgba(0,0,0,0.1);
+    }
+    #panel.open { transform: translateX(0); }
+    #panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-bottom: 1px solid #eee;
+      background: #f8f9fa;
+    }
+    #panel-title { font-size: 14px; font-weight: 600; color: #1A4C8B; }
+    #close-panel {
+      background: none; border: none; cursor: pointer;
+      color: #888; font-size: 20px; display: flex; padding: 2px;
+    }
+    #close-panel:hover { color: #333; }
+    #panel-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+    /* SIDEBAR */
+    #sidebar {
+      position: fixed; left: 0; top: 56px; bottom: 0; width: 220px;
+      background: white; border-right: 1px solid #e0e0e0;
+      display: flex; flex-direction: column;
+      transform: translateX(-100%); transition: transform 0.22s ease;
+      z-index: 100; box-shadow: 3px 0 12px rgba(0,0,0,0.1);
+    }
+    #sidebar.open { transform: translateX(0); }
+    #sidebar h4 {
+      font-size: 13px; font-weight: 600; padding: 12px 14px;
+      border-bottom: 1px solid #eee; background: #f8f9fa; color: #333;
+    }
+    #entries-list { flex: 1; overflow-y: auto; }
+    .entry-item {
+      padding: 10px 14px; border-bottom: 1px solid #f0f0f0;
+      cursor: pointer; transition: background 0.1s;
+    }
+    .entry-item:hover { background: #f5f8ff; }
+    .entry-name { font-size: 13px; font-weight: 500; color: #222; }
+    .entry-sub { font-size: 11px; color: #888; margin-top: 2px; }
+    .badge {
+      display: inline-block; font-size: 10px; font-weight: 600;
+      padding: 2px 7px; border-radius: 10px; margin-bottom: 4px;
+    }
+    .badge-note { background: #DBEAFE; color: #1E40AF; }
+    .badge-image { background: #D1FAE5; color: #065F46; }
+    .badge-route { background: #FFE4CC; color: #92400E; }
+
+    /* FORM ELEMENTS */
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-label { font-size: 12px; color: #555; font-weight: 500; }
+    input[type=text], textarea {
+      width: 100%; padding: 8px 10px; border: 1px solid #ddd;
+      border-radius: 6px; font-size: 13px; font-family: Arial, sans-serif;
+      background: #fafafa; color: #222; resize: vertical;
+    }
+    input[type=text]:focus, textarea:focus {
+      outline: 2px solid #378ADD; border-color: transparent; background: white;
+    }
+    .save-btn {
+      padding: 9px 16px; background: #1A4C8B; color: white;
+      border: none; border-radius: 6px; font-size: 13px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 6px; justify-content: center;
+      margin-top: 4px;
+    }
+    .save-btn:hover { background: #133972; }
+    .delete-btn {
+      padding: 8px 14px; background: #FEE2E2; color: #991B1B;
+      border: 1px solid #FCA5A5; border-radius: 6px; font-size: 13px;
+      cursor: pointer; display: flex; align-items: center; gap: 6px; justify-content: center;
+    }
+    .delete-btn:hover { background: #FECACA; }
+    .img-preview {
+      width: 100%; max-height: 130px; object-fit: cover;
+      border-radius: 6px; border: 1px solid #eee;
+    }
+    .info-box {
+      background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 6px;
+      padding: 8px 10px; font-size: 12px; color: #1E40AF;
+    }
+    .route-pts {
+      background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 6px;
+      padding: 8px 10px; font-size: 12px; color: #92400E;
+    }
+    .empty-state { text-align: center; padding: 40px 16px; color: #aaa; }
+    .empty-state i { font-size: 36px; margin-bottom: 10px; display: block; }
+    .empty-state p { font-size: 13px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1><i class="ti ti-map-2"></i> Mapa Interativo</h1>
+  <button class="tool-btn active" id="btn-note" onclick="setMode('note')">
+    <i class="ti ti-notes"></i> Nota
+  </button>
+  <button class="tool-btn" id="btn-image" onclick="setMode('image')">
+    <i class="ti ti-photo"></i> Imagem
+  </button>
+  <button class="tool-btn" id="btn-route" onclick="setMode('route')">
+    <i class="ti ti-route"></i> Rota
+  </button>
+  <button class="tool-btn" id="btn-list" onclick="toggleSidebar()">
+    <i class="ti ti-list"></i> Registros
+    <span id="count-badge">0</span>
+  </button>
+  <button class="tool-btn" id="btn-clear" onclick="clearRoute()" style="display:none; background:rgba(220,50,50,0.3)">
+    <i class="ti ti-x"></i> Cancelar rota
+  </button>
+  <span id="mode-label">Modo: Nota — clique no mapa</span>
+</div>
+
+<div id="map"></div>
+
+<!-- PAINEL DE FORMULÁRIO -->
+<div id="panel">
+  <div id="panel-header">
+    <span id="panel-title">Nova nota</span>
+    <button id="close-panel" onclick="closePanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div id="panel-body"></div>
+</div>
+
+<!-- PAINEL LATERAL DE REGISTROS -->
+<div id="sidebar">
+  <h4>📋 Registros da sessão</h4>
+  <div id="entries-list"></div>
+</div>
+
+<script>
+// ─── ESTADO ───────────────────────────────────────────────
+let map, mode = 'note', entries = [], routePoints = [], routePolyline = null, sidebarOpen = false;
+
+// ─── INICIALIZAÇÃO DO MAPA ────────────────────────────────
+function initMap() {
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: -14.235, lng: -51.925 }, // Centro do Brasil
+    zoom: 5,
+    mapTypeControl: true,
+    streetViewControl: false,
+    fullscreenControl: true,
+    styles: [
+      { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }
+    ]
+  });
+
+  map.addListener('click', function(e) {
+    const lat = e.latLng.lat();
+    const lng = e.latLng.lng();
+    if (mode === 'route') {
+      addRoutePoint(lat, lng);
+    } else {
+      openForm(mode, lat, lng);
+    }
+  });
+}
+
+// ─── MODO ─────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  ['note','image','route'].forEach(t => {
+    document.getElementById('btn-'+t).classList.toggle('active', t === m);
+  });
+  const labels = { note: 'Nota', image: 'Imagem', route: 'Rota' };
+  document.getElementById('mode-label').textContent = 'Modo: ' + labels[m] + ' — clique no mapa';
+  document.getElementById('btn-clear').style.display = m === 'route' ? '' : 'none';
+  if (m !== 'route') cancelRoute();
+  closePanel();
+}
+
+// ─── ROTA ─────────────────────────────────────────────────
+function addRoutePoint(lat, lng) {
+  routePoints.push({ lat, lng });
+  new google.maps.Marker({
+    position: { lat, lng }, map,
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: '#D85A30', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2 }
+  });
+  if (routePolyline) routePolyline.setMap(null);
+  routePolyline = new google.maps.Polyline({
+    path: routePoints, map,
+    strokeColor: '#D85A30', strokeOpacity: 0.8, strokeWeight: 3,
+    icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '20px' }]
+  });
+  if (routePoints.length >= 2) openRouteForm();
+}
+
+function cancelRoute() {
+  routePoints = [];
+  if (routePolyline) { routePolyline.setMap(null); routePolyline = null; }
+}
+
+function clearRoute() {
+  cancelRoute();
+  closePanel();
+}
+
+// ─── FORMULÁRIOS ──────────────────────────────────────────
+function openForm(type, lat, lng) {
+  const body = document.getElementById('panel-body');
+  const icons = { note: '📝', image: '🖼️' };
+  document.getElementById('panel-title').textContent = icons[type] + ' ' + (type === 'note' ? 'Nova Nota' : 'Nova Imagem');
+
+  if (type === 'note') {
+    body.innerHTML = `
+      <div class="form-group"><label class="form-label">Título do local</label>
+        <input type="text" id="f-title" placeholder="Ex: Capital do Brasil"></div>
+      <div class="form-group"><label class="form-label">Observação / nota</label>
+        <textarea id="f-note" rows="5" placeholder="Escreva sua observação sobre este local..."></textarea></div>
+      <div class="form-group"><label class="form-label">Seu nome</label>
+        <input type="text" id="f-student" placeholder="Nome do aluno"></div>
+      <button class="save-btn" onclick="saveEntry('note',${lat},${lng})">
+        <i class="ti ti-check"></i> Salvar nota</button>`;
+  } else {
+    body.innerHTML = `
+      <div class="form-group"><label class="form-label">Título do local</label>
+        <input type="text" id="f-title" placeholder="Ex: Pirâmides do Egito"></div>
+      <div class="form-group"><label class="form-label">URL da imagem</label>
+        <input type="text" id="f-img" placeholder="https://..." oninput="previewImg(this.value)"></div>
+      <img id="img-prev" class="img-preview" style="display:none">
+      <div class="form-group"><label class="form-label">Legenda</label>
+        <textarea id="f-note" rows="3" placeholder="Descreva a imagem..."></textarea></div>
+      <div class="form-group"><label class="form-label">Seu nome</label>
+        <input type="text" id="f-student" placeholder="Nome do aluno"></div>
+      <button class="save-btn" onclick="saveEntry('image',${lat},${lng})">
+        <i class="ti ti-check"></i> Salvar imagem</button>`;
+  }
+  document.getElementById('panel').classList.add('open');
+}
+
+function openRouteForm() {
+  document.getElementById('panel-title').textContent = '🛤️ Nova Rota';
+  document.getElementById('panel-body').innerHTML = `
+    <div class="form-group"><label class="form-label">Nome da rota</label>
+      <input type="text" id="f-title" placeholder="Ex: Rota da Seda"></div>
+    <div class="route-pts">📍 ${routePoints.length} pontos marcados no mapa<br>
+      <small>Continue clicando para adicionar mais pontos</small></div>
+    <div class="form-group"><label class="form-label">Descrição</label>
+      <textarea id="f-note" rows="4" placeholder="Descreva o percurso, período histórico..."></textarea></div>
+    <div class="form-group"><label class="form-label">Seu nome</label>
+      <input type="text" id="f-student" placeholder="Nome do aluno"></div>
+    <button class="save-btn" onclick="saveRoute()">
+      <i class="ti ti-check"></i> Salvar rota</button>`;
+  document.getElementById('panel').classList.add('open');
+}
+
+function previewImg(url) {
+  const el = document.getElementById('img-prev');
+  if (url) { el.src = url; el.style.display = 'block'; } else { el.style.display = 'none'; }
+}
+
+// ─── SALVAR ───────────────────────────────────────────────
+function saveEntry(type, lat, lng) {
+  const title = document.getElementById('f-title').value.trim() || 'Sem título';
+  const note = document.getElementById('f-note').value.trim();
+  const student = document.getElementById('f-student').value.trim() || 'Anônimo';
+  const img = document.getElementById('f-img') ? document.getElementById('f-img').value.trim() : '';
+
+  const entry = { id: Date.now(), type, title, note, student, img, lat, lng };
+  entries.push(entry);
+
+  const colors = { note: '#378ADD', image: '#1D9E75' };
+  const icons = { note: '📝', image: '🖼️' };
+  const marker = new google.maps.Marker({
+    position: { lat, lng }, map, title,
+    label: { text: icons[type], fontSize: '16px' },
+    icon: {
+      path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+      scale: 8, fillColor: colors[type], fillOpacity: 1,
+      strokeColor: 'white', strokeWeight: 2
+    }
+  });
+  marker.addListener('click', () => showEntry(entry.id));
+
+  updateCount();
+  renderList();
+  closePanel();
+}
+
+function saveRoute() {
+  const title = document.getElementById('f-title').value.trim() || 'Rota sem nome';
+  const note = document.getElementById('f-note').value.trim();
+  const student = document.getElementById('f-student').value.trim() || 'Anônimo';
+  const pts = [...routePoints];
+
+  const entry = { id: Date.now(), type: 'route', title, note, student, routePoints: pts };
+  entries.push(entry);
+
+  if (routePolyline) routePolyline.setOptions({ strokeOpacity: 1, strokeWeight: 3 });
+
+  new google.maps.Marker({
+    position: pts[0], map, title,
+    label: { text: '🛤️', fontSize: '16px' },
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#D85A30', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2 }
+  }).addListener('click', () => showEntry(entry.id));
+
+  routePoints = [];
+  routePolyline = null;
+  updateCount();
+  renderList();
+  closePanel();
+  setMode('note');
+}
+
+// ─── VER REGISTRO ─────────────────────────────────────────
+function showEntry(id) {
+  const e = entries.find(x => x.id === id);
+  if (!e) return;
+  const badges = { note: 'badge-note', image: 'badge-image', route: 'badge-route' };
+  const labels = { note: 'Nota', image: 'Imagem', route: 'Rota' };
+  document.getElementById('panel-title').textContent = e.title;
+  let html = `<span class="badge ${badges[e.type]}">${labels[e.type]}</span>`;
+  if (e.img) html += `<img src="${e.img}" class="img-preview" onerror="this.style.display='none'">`;
+  if (e.note) html += `<div style="font-size:13px;line-height:1.6;color:#333">${e.note}</div>`;
+  if (e.type === 'route') html += `<div class="route-pts">📍 ${e.routePoints.length} pontos no percurso</div>`;
+  html += `<div style="font-size:12px;color:#888;margin-top:4px">👤 ${e.student}</div>`;
+  html += `<button class="delete-btn" onclick="deleteEntry(${id})"><i class="ti ti-trash"></i> Remover registro</button>`;
+  document.getElementById('panel-body').innerHTML = html;
+  document.getElementById('panel').classList.add('open');
+}
+
+function deleteEntry(id) {
+  entries = entries.filter(e => e.id !== id);
+  updateCount();
+  renderList();
+  closePanel();
+}
+
+// ─── LISTA LATERAL ────────────────────────────────────────
+function renderList() {
+  const list = document.getElementById('entries-list');
+  if (entries.length === 0) {
+    list.innerHTML = `<div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhum registro ainda.<br>Clique no mapa para começar!</p></div>`;
+    return;
+  }
+  const labels = { note: 'Nota', image: 'Imagem', route: 'Rota' };
+  const badges = { note: 'badge-note', image: 'badge-image', route: 'badge-route' };
+  list.innerHTML = entries.map(e => `
+    <div class="entry-item" onclick="showEntry(${e.id})">
+      <span class="badge ${badges[e.type]}">${labels[e.type]}</span>
+      <div class="entry-name">${e.title}</div>
+      <div class="entry-sub">👤 ${e.student}</div>
+    </div>`).join('');
+}
+
+function updateCount() { document.getElementById('count-badge').textContent = entries.length; }
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  document.getElementById('sidebar').classList.toggle('open', sidebarOpen);
+  document.getElementById('btn-list').classList.toggle('active', sidebarOpen);
+}
+function closePanel() { document.getElementById('panel').classList.remove('open'); }
+
+renderList();
+</script>
+
+<!--
+  ============================================================
+  SUBSTITUA "AIzaSyA0VlyURih7QyKodwL0MpN8bPeUWZ4jOoE" PELA SUA CHAVE DO GOOGLE MAPS API
+  Exemplo: ?key=AIzaSyB3xKj...
+  ============================================================
+-->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA0VlyURih7QyKodwL0MpN8bPeUWZ4jOoE&callback=initMap" async defer></script>
+
+</body>
+</html>
